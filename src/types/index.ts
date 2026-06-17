@@ -93,11 +93,12 @@ export interface Answer {
   answer: string | string[];
   score?: number;
   isCorrect?: boolean;
+  comment?: string;
 }
 
 export interface Annotation {
   id: string;
-  type: 'pen' | 'text' | 'rect' | 'highlight';
+  type: 'pen' | 'text' | 'rect' | 'highlight' | 'stamp';
   pageIndex: number;
   color: string;
   strokeWidth?: number;
@@ -107,6 +108,7 @@ export interface Annotation {
   width?: number;
   height?: number;
   text?: string;
+  stamp?: 'check' | 'cross' | 'circle' | 'excellent' | 'redo' | 'star' | 'question';
 }
 
 export interface Submission {

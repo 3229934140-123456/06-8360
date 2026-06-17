@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   FileText,
   Plus,
@@ -19,7 +19,8 @@ import {
   Save,
   Send,
   Calendar,
-  BookOpen
+  BookOpen,
+  Copy
 } from 'lucide-react';
 import Layout from '@/components/layout/Layout';
 import { useClassStore } from '@/store/useClassStore';
@@ -169,6 +170,16 @@ const AssignmentList = () => {
                         <p className="text-2xl font-bold text-success-600">{gradedCount}</p>
                         <p className="text-xs text-neutral-500">已批改</p>
                       </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/teacher/assignments/create?copy=${assignment.id}`);
+                        }}
+                        className="p-2 text-neutral-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                        title="复制该作业"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
                       <ChevronRight className="w-5 h-5 text-neutral-300" />
                     </div>
                   </div>
@@ -198,8 +209,9 @@ const AssignmentList = () => {
 
 const AssignmentCreate = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { currentUser } = useAuthStore();
-  const { classes, createAssignment } = useClassStore();
+  const { classes, createAssignment, getAssignmentById } = useClassStore();
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -222,6 +234,31 @@ const AssignmentCreate = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const myClasses = classes.filter(c => c.teacherId === (currentUser?.id || 't1'));
+
+  useEffect(() => {
+    const copyId = searchParams.get('copy');
+    if (copyId) {
+      const sourceAssignment = getAssignmentById(copyId);
+      if (sourceAssignment) {
+        setTitle(sourceAssignment.title + '（副本）');
+        setDescription(sourceAssignment.description);
+        setTotalScore(sourceAssignment.totalScore);
+        setSubject(sourceAssignment.subject || '');
+        setQuestions(
+          [...sourceAssignment.questions].map(q => ({
+            ...q,
+            id: 'q' + Date.now() + Math.random()
+          }))
+        );
+        setReferenceMaterials(
+          [...sourceAssignment.referenceMaterials].map(m => ({
+            ...m,
+            id: 'rm' + Date.now() + Math.random()
+          }))
+        );
+      }
+    }
+  }, [searchParams, getAssignmentById]);
 
   const handleSave = (publish: boolean) => {
     if (!title.trim() || !classId) return;
@@ -812,6 +849,13 @@ const AssignmentDetail = () => {
             </div>
             <p className="text-neutral-500 mt-1">{assignment.className}</p>
           </div>
+          <button
+            onClick={() => navigate(`/teacher/assignments/create?copy=${assignment.id}`)}
+            className="btn btn-secondary"
+          >
+            <Copy className="w-4 h-4 mr-1.5" />
+            复制
+          </button>
           <button
             onClick={() => navigate(`/teacher/grading/${assignment.id}`)}
             className="btn btn-primary"

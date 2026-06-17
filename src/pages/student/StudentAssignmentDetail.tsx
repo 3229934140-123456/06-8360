@@ -635,6 +635,16 @@ const GradingResult = ({ assignment, submission }: { assignment: any; submission
                               </p>
                             </div>
                           )}
+                          {answer.score !== undefined && answer.score !== null && (
+                            <p className="text-sm font-medium text-primary-600 mt-2">
+                              得分：{answer.score}/{question?.score ?? 0} 分
+                            </p>
+                          )}
+                          {answer.comment && (
+                            <p className="text-sm text-neutral-600 mt-1">
+                              老师点评：{answer.comment}
+                            </p>
+                          )}
                         </div>
                       </div>
                     );

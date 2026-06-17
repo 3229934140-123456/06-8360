@@ -160,7 +160,8 @@ const GradingDetail = () => {
   const { 
     getAssignmentById, 
     getSubmissionsByAssignmentId, 
-    gradeSubmission 
+    gradeSubmission,
+    updateSubmission
   } = useClassStore();
   const { addNotification } = useNotificationStore();
   
@@ -170,6 +171,8 @@ const GradingDetail = () => {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [activeTab, setActiveTab] = useState<'image' | 'answer'>('image');
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [questionScores, setQuestionScores] = useState<Record<string, number>>({});
+  const [questionComments, setQuestionComments] = useState<Record<string, string>>({});
 
   const assignment = getAssignmentById(assignmentId || '');
   const submissions = getSubmissionsByAssignmentId(assignmentId || '');
@@ -192,8 +195,32 @@ const GradingDetail = () => {
       setComment(currentSubmission.comment || '');
       setAnnotations(currentSubmission.annotations || []);
       setCurrentImageIndex(0);
+
+      if (currentSubmission.status === 'graded' && currentSubmission.answers) {
+        const scores: Record<string, number> = {};
+        const comments: Record<string, string> = {};
+        currentSubmission.answers.forEach((a) => {
+          if (a.score !== undefined) {
+            scores[a.questionId] = a.score;
+          }
+          comments[a.questionId] = a.comment || '';
+        });
+        setQuestionScores(scores);
+        setQuestionComments(comments);
+      } else {
+        setQuestionScores({});
+        setQuestionComments({});
+      }
     }
   }, [currentSubmission?.id]);
+
+  const totalQuestionScore = Object.values(questionScores).reduce((sum, s) => sum + (typeof s === 'number' ? s : 0), 0);
+
+  useEffect(() => {
+    if (totalQuestionScore > 0) {
+      setScore(totalQuestionScore);
+    }
+  }, [totalQuestionScore]);
 
   if (!assignment) {
     return (
@@ -220,22 +247,42 @@ const GradingDetail = () => {
 
   const handleSubmitGrade = () => {
     if (currentSubmission && score !== null) {
-      gradeSubmission(currentSubmission.id, score, comment, annotations);
-      
+      const finalScore = score;
+
+      const updatedAnswers = (currentSubmission.answers || []).map(a => ({
+        ...a,
+        score: questionScores[a.questionId],
+        comment: questionComments[a.questionId] || ''
+      }));
+
+      updateSubmission(currentSubmission.id, { answers: updatedAnswers });
+      gradeSubmission(currentSubmission.id, finalScore, comment, annotations);
+
       addNotification({
         userId: currentSubmission.studentId,
         userRole: 'student',
         type: 'assignment_graded',
         title: '作业已批改',
-        content: `你的作业"${assignment.title}"已被批改，得分：${score}/${assignment.totalScore}`,
+        content: `你的作业"${assignment.title}"已被批改，得分：${finalScore}/${assignment.totalScore}`,
         relatedId: assignment.id,
         relatedType: 'assignment'
       });
 
-      if (currentIndex < displaySubmissions.length - 1) {
-        setCurrentIndex(currentIndex + 1);
+      const isPendingMode = !submissionId;
+      if (isPendingMode) {
+        const remainingAfterGrade = displaySubmissions.length - 1;
+        if (remainingAfterGrade <= 0) {
+          navigate(`/teacher/grading/${assignmentId}`);
+        } else {
+          const nextIndex = Math.min(currentIndex, remainingAfterGrade - 1);
+          setCurrentIndex(nextIndex);
+        }
       } else {
-        navigate(`/teacher/grading/${assignmentId}`);
+        if (currentIndex < displaySubmissions.length - 1) {
+          setCurrentIndex(currentIndex + 1);
+        } else {
+          navigate(`/teacher/grading/${assignmentId}`);
+        }
       }
     }
   };
@@ -495,6 +542,43 @@ const GradingDetail = () => {
                                   </p>
                                 </div>
                               )}
+                              <div className="mt-4 pt-4 border-t border-neutral-100 space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <label className="text-sm text-neutral-600 w-16 flex-shrink-0">分数：</label>
+                                  <input
+                                    type="number"
+                                    className="input w-24 inline"
+                                    min={0}
+                                    max={question?.score ?? 0}
+                                    value={questionScores[answer.questionId] ?? ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setQuestionScores(prev => ({
+                                        ...prev,
+                                        [answer.questionId]: val === '' ? (undefined as any) : Number(val)
+                                      }));
+                                    }}
+                                  />
+                                  <span className="text-sm text-neutral-500">
+                                    / {question?.score ?? 0} 分
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <label className="text-sm text-neutral-600 w-16 flex-shrink-0">点评：</label>
+                                  <input
+                                    type="text"
+                                    className="input flex-1"
+                                    placeholder="本题点评（选填）"
+                                    value={questionComments[answer.questionId] ?? ''}
+                                    onChange={(e) => {
+                                      setQuestionComments(prev => ({
+                                        ...prev,
+                                        [answer.questionId]: e.target.value
+                                      }));
+                                    }}
+                                  />
+                                </div>
+                              </div>
                             </div>
                           );
                         })}
@@ -569,6 +653,9 @@ const GradingDetail = () => {
                       </button>
                     ))}
                   </div>
+                  <p className="text-xs text-primary-600 mt-2">
+                    自动汇总：{totalQuestionScore} 分
+                  </p>
                 </div>
 
                 <div>

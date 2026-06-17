@@ -9,7 +9,8 @@ import {
   Redo2,
   Minus,
   Plus,
-  RotateCcw
+  RotateCcw,
+  CircleDashed
 } from 'lucide-react';
 import { cn } from '@/utils';
 import type { Annotation } from '@/types';
@@ -22,7 +23,7 @@ interface AnnotationCanvasProps {
   pageIndex?: number;
 }
 
-type ToolType = 'pen' | 'text' | 'rect' | 'highlight' | 'eraser';
+type ToolType = 'pen' | 'text' | 'rect' | 'highlight' | 'eraser' | 'stamp';
 
 const colors = [
   '#EF4444',
@@ -31,6 +32,16 @@ const colors = [
   '#3B82F6',
   '#8B5CF6',
   '#000000'
+];
+
+const STAMPS = [
+  { key: 'check' as const, label: '对号', color: '#22C55E', symbol: '✓' },
+  { key: 'cross' as const, label: '错号', color: '#EF4444', symbol: '✗' },
+  { key: 'circle' as const, label: '圈重点', color: '#F59E0B', symbol: '○' },
+  { key: 'excellent' as const, label: '优秀', color: '#3B82F6', symbol: '优秀' },
+  { key: 'redo' as const, label: '重做', color: '#EF4444', symbol: '重做' },
+  { key: 'star' as const, label: '星标', color: '#F59E0B', symbol: '★' },
+  { key: 'question' as const, label: '疑问', color: '#8B5CF6', symbol: '?' },
 ];
 
 const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false, pageIndex = 0 }: AnnotationCanvasProps) => {
@@ -47,6 +58,7 @@ const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false, p
   const [history, setHistory] = useState<Annotation[][]>([annotations]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [textInput, setTextInput] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [currentStamp, setCurrentStamp] = useState<typeof STAMPS[number]['key']>('check');
 
   const canvasWidth = 800;
   const canvasHeight = 600;
@@ -203,6 +215,17 @@ const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false, p
           ctx.fillText(ann.text, ann.x, ann.y);
         }
         break;
+      case 'stamp':
+        if (ann.x !== undefined && ann.y !== undefined) {
+          const stampData = STAMPS.find(s => s.key === ann.stamp);
+          const symbol = stampData?.symbol || ann.text || '';
+          ctx.font = 'bold 36px sans-serif';
+          ctx.fillStyle = ann.color;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(symbol, ann.x, ann.y);
+        }
+        break;
     }
     
     ctx.restore();
@@ -226,6 +249,25 @@ const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false, p
     if (readOnly) return;
     
     const pos = getCanvasCoords(e);
+
+    if (currentTool === 'stamp') {
+      const stampData = STAMPS.find(s => s.key === currentStamp);
+      const newAnnotation: Annotation = {
+        id: `ann-${Date.now()}`,
+        type: 'stamp',
+        pageIndex: pageIndex,
+        color: stampData?.color || '#000000',
+        x: pos.x,
+        y: pos.y,
+        stamp: currentStamp,
+        text: stampData?.symbol
+      };
+      const newAnnotations = [...(history[historyIndex] || []), newAnnotation];
+      pushHistory(newAnnotations);
+      onChange?.(newAnnotations);
+      return;
+    }
+
     setIsDrawing(true);
     setStartPos(pos);
     setCurrentPath([pos]);
@@ -324,107 +366,134 @@ const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false, p
     { type: 'rect' as ToolType, icon: Square, label: '矩形' },
     { type: 'highlight' as ToolType, icon: Highlighter, label: '荧光笔' },
     { type: 'eraser' as ToolType, icon: Eraser, label: '橡皮擦' },
+    { type: 'stamp' as ToolType, icon: CircleDashed, label: '印章' },
   ];
 
   return (
     <div className="flex flex-col h-full">
       {!readOnly && (
-        <div className="flex items-center justify-between p-3 bg-white border-b border-neutral-200 rounded-t-xl">
-          <div className="flex items-center gap-1">
-            {tools.map(tool => {
-              const Icon = tool.icon;
-              return (
-                <button
-                  key={tool.type}
-                  onClick={() => setCurrentTool(tool.type)}
-                  className={cn(
-                    "p-2.5 rounded-lg transition-colors",
-                    currentTool === tool.type
-                      ? "bg-primary-100 text-primary-600"
-                      : "text-neutral-500 hover:bg-neutral-100"
-                  )}
-                  title={tool.label}
-                >
-                  <Icon className="w-5 h-5" />
-                </button>
-              );
-            })}
-            
-            <div className="w-px h-6 bg-neutral-200 mx-2" />
-            
-            <div className="flex items-center gap-1.5">
-              {colors.map(color => (
-                <button
-                  key={color}
-                  onClick={() => setCurrentColor(color)}
-                  className={cn(
-                    "w-6 h-6 rounded-full border-2 transition-all",
-                    currentColor === color
-                      ? "border-neutral-800 scale-110"
-                      : "border-white shadow-sm hover:scale-105"
-                  )}
-                  style={{ backgroundColor: color }}
+        <div className="bg-white border-b border-neutral-200 rounded-t-xl">
+          <div className="flex items-center justify-between p-3">
+            <div className="flex items-center gap-1">
+              {tools.map(tool => {
+                const Icon = tool.icon;
+                return (
+                  <button
+                    key={tool.type}
+                    onClick={() => setCurrentTool(tool.type)}
+                    className={cn(
+                      "p-2.5 rounded-lg transition-colors",
+                      currentTool === tool.type
+                        ? "bg-primary-100 text-primary-600"
+                        : "text-neutral-500 hover:bg-neutral-100"
+                    )}
+                    title={tool.label}
+                  >
+                    <Icon className="w-5 h-5" />
+                  </button>
+                );
+              })}
+              
+              <div className="w-px h-6 bg-neutral-200 mx-2" />
+              
+              <div className="flex items-center gap-1.5">
+                {colors.map(color => (
+                  <button
+                    key={color}
+                    onClick={() => setCurrentColor(color)}
+                    className={cn(
+                      "w-6 h-6 rounded-full border-2 transition-all",
+                      currentColor === color
+                        ? "border-neutral-800 scale-110"
+                        : "border-white shadow-sm hover:scale-105"
+                    )}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+
+              {currentTool === 'stamp' && (
+                <>
+                  <div className="w-px h-6 bg-neutral-200 mx-2" />
+                  <div className="flex items-center gap-1">
+                    {STAMPS.map(stamp => (
+                      <button
+                        key={stamp.key}
+                        onClick={() => setCurrentStamp(stamp.key)}
+                        className={cn(
+                          "px-2 py-1.5 rounded-lg text-sm font-bold transition-all border-2",
+                          currentStamp === stamp.key
+                            ? "bg-primary-100 border-primary-400 scale-105"
+                            : "bg-neutral-50 border-transparent hover:bg-neutral-100"
+                        )}
+                        style={{ color: stamp.color }}
+                        title={stamp.label}
+                      >
+                        {stamp.symbol}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <div className="w-px h-6 bg-neutral-200 mx-2" />
+              
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-neutral-500">粗细</span>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={strokeWidth}
+                  onChange={(e) => setStrokeWidth(Number(e.target.value))}
+                  className="w-20"
                 />
-              ))}
+              </div>
             </div>
 
-            <div className="w-px h-6 bg-neutral-200 mx-2" />
-            
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-neutral-500">粗细</span>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={strokeWidth}
-                onChange={(e) => setStrokeWidth(Number(e.target.value))}
-                className="w-20"
-              />
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleUndo}
+                disabled={historyIndex === 0}
+                className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="撤销"
+              >
+                <Undo2 className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleRedo}
+                disabled={historyIndex >= history.length - 1}
+                className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="重做"
+              >
+                <Redo2 className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleClear}
+                className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100"
+                title="清除全部"
+              >
+                <RotateCcw className="w-5 h-5" />
+              </button>
+              
+              <div className="w-px h-6 bg-neutral-200 mx-2" />
+              
+              <button
+                onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}
+                className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100"
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+              <span className="text-sm text-neutral-600 w-12 text-center">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                onClick={() => setZoom(Math.min(2, zoom + 0.1))}
+                className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
             </div>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleUndo}
-              disabled={historyIndex === 0}
-              className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed"
-              title="撤销"
-            >
-              <Undo2 className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleRedo}
-              disabled={historyIndex >= history.length - 1}
-              className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed"
-              title="重做"
-            >
-              <Redo2 className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleClear}
-              className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100"
-              title="清除全部"
-            >
-              <RotateCcw className="w-5 h-5" />
-            </button>
-            
-            <div className="w-px h-6 bg-neutral-200 mx-2" />
-            
-            <button
-              onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}
-              className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100"
-            >
-              <Minus className="w-4 h-4" />
-            </button>
-            <span className="text-sm text-neutral-600 w-12 text-center">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button
-              onClick={() => setZoom(Math.min(2, zoom + 0.1))}
-              className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
           </div>
         </div>
       )}
