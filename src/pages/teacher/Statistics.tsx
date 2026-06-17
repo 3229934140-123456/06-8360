@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -30,24 +30,39 @@ import {
   Filter
 } from 'lucide-react';
 import Layout from '@/components/layout/Layout';
-import { mockTrendData, mockStatistics, mockAssignments } from '@/mock';
+import { mockTrendData } from '@/mock';
 import { useClassStore } from '@/store/useClassStore';
 
 const Statistics = () => {
-  const { classes, getAssignmentsByTeacherId } = useClassStore();
+  const { classes, getAssignmentsByTeacherId, computeAssignmentStats, getSubmissionsByAssignmentId, getAssignmentById } = useClassStore();
   const [selectedClass, setSelectedClass] = useState('all');
   const [selectedAssignment, setSelectedAssignment] = useState('a1');
 
   const myClasses = classes.filter(c => c.teacherId === 't1');
-  const assignments = getAssignmentsByTeacherId('t1');
-  const currentAssignment = assignments.find(a => a.id === selectedAssignment) || mockAssignments[0];
+  const allAssignments = getAssignmentsByTeacherId('t1');
+  const assignments = selectedClass === 'all'
+    ? allAssignments
+    : allAssignments.filter(a => a.classId === selectedClass);
+  const currentAssignment = getAssignmentById(selectedAssignment) || assignments[0];
 
-  const scoreDistributionData = mockStatistics.scoreDistribution.map(item => ({
+  const stats = useMemo(
+    () => computeAssignmentStats(selectedAssignment),
+    [selectedAssignment, computeAssignmentStats]
+  );
+
+  const gradedStudents = useMemo(() => {
+    const submissions = getSubmissionsByAssignmentId(selectedAssignment);
+    return submissions
+      .filter(s => s.status === 'graded' && s.score !== null)
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  }, [selectedAssignment, getSubmissionsByAssignmentId]);
+
+  const scoreDistributionData = stats.scoreDistribution.map(item => ({
     ...item,
     人数: item.count
   }));
 
-  const knowledgePointData = mockStatistics.knowledgePointStats.map(item => ({
+  const knowledgePointData = stats.knowledgePointStats.map(item => ({
     ...item,
     正确率: Math.round(item.accuracy * 100)
   }));
@@ -57,7 +72,7 @@ const Statistics = () => {
   const statsCards = [
     {
       label: '班级平均分',
-      value: mockStatistics.averageScore,
+      value: stats.averageScore,
       unit: '分',
       icon: TrendingUp,
       color: 'bg-primary-500',
@@ -66,7 +81,7 @@ const Statistics = () => {
     },
     {
       label: '作业提交率',
-      value: Math.round(mockStatistics.submissionRate * 100),
+      value: Math.round(stats.submissionRate * 100),
       unit: '%',
       icon: Target,
       color: 'bg-success-500',
@@ -75,7 +90,7 @@ const Statistics = () => {
     },
     {
       label: '最高分',
-      value: mockStatistics.highestScore,
+      value: stats.highestScore,
       unit: '分',
       icon: Award,
       color: 'bg-accent-500',
@@ -84,7 +99,7 @@ const Statistics = () => {
     },
     {
       label: '待提升学生',
-      value: 2,
+      value: gradedStudents.filter(s => (s.score ?? 0) < 60).length,
       unit: '人',
       icon: AlertTriangle,
       color: 'bg-warning-500',
@@ -93,7 +108,7 @@ const Statistics = () => {
     }
   ];
 
-  const errorKnowledgePoints = mockStatistics.knowledgePointStats
+  const errorKnowledgePoints = stats.knowledgePointStats
     .filter(k => k.accuracy < 0.7)
     .sort((a, b) => a.accuracy - b.accuracy);
 
@@ -351,38 +366,40 @@ const Statistics = () => {
               <p className="text-sm text-neutral-500 mt-1">本次作业成绩排名</p>
             </div>
             <div className="p-4 space-y-2">
-              {[
-                { rank: 1, name: '赵六', score: 59, total: 60, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=student4' },
-                { rank: 2, name: '张三', score: 58, total: 60, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=student1' },
-                { rank: 3, name: '王五', score: 45, total: 60, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=student3' },
-                { rank: 4, name: '李四', score: 13, total: 60, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=student2' },
-              ].map(student => (
-                <div
-                  key={student.rank}
-                  className="flex items-center gap-3 p-3 hover:bg-neutral-50 rounded-lg transition-colors"
-                >
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                    student.rank === 1 ? 'bg-yellow-400 text-white' :
-                    student.rank === 2 ? 'bg-neutral-400 text-white' :
-                    student.rank === 3 ? 'bg-amber-600 text-white' :
-                    'bg-neutral-200 text-neutral-600'
-                  }`}>
-                    {student.rank}
-                  </span>
-                  <img
-                    src={student.avatar}
-                    alt=""
-                    className="w-8 h-8 rounded-full bg-neutral-200"
-                  />
-                  <span className="flex-1 font-medium text-neutral-700 text-sm">
-                    {student.name}
-                  </span>
-                  <span className="font-bold text-primary-600">
-                    {student.score}
-                    <span className="text-sm font-normal text-neutral-400">/{student.total}</span>
-                  </span>
+              {gradedStudents.length === 0 ? (
+                <div className="text-center py-8 text-neutral-400">
+                  <Users className="w-12 h-12 mx-auto mb-2" />
+                  <p>暂无已批改的提交</p>
                 </div>
-              ))}
+              ) : (
+                gradedStudents.map((student, index) => (
+                  <div
+                    key={student.id}
+                    className="flex items-center gap-3 p-3 hover:bg-neutral-50 rounded-lg transition-colors"
+                  >
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                      index === 0 ? 'bg-yellow-400 text-white' :
+                      index === 1 ? 'bg-neutral-400 text-white' :
+                      index === 2 ? 'bg-amber-600 text-white' :
+                      'bg-neutral-200 text-neutral-600'
+                    }`}>
+                      {index + 1}
+                    </span>
+                    <img
+                      src={student.studentAvatar}
+                      alt=""
+                      className="w-8 h-8 rounded-full bg-neutral-200"
+                    />
+                    <span className="flex-1 font-medium text-neutral-700 text-sm">
+                      {student.studentName}
+                    </span>
+                    <span className="font-bold text-primary-600">
+                      {student.score}
+                      <span className="text-sm font-normal text-neutral-400">/{currentAssignment?.totalScore || 100}</span>
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

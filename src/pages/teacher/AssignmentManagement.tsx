@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   FileText,
@@ -24,6 +24,7 @@ import {
 import Layout from '@/components/layout/Layout';
 import { useClassStore } from '@/store/useClassStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { formatDate, isOverdue, getDaysRemaining } from '@/utils';
 import type { Assignment, Question, ReferenceMaterial, QuestionType } from '@/types';
 
@@ -215,6 +216,10 @@ const AssignmentCreate = () => {
     score: 10,
     options: ['', '', '', '']
   });
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkName, setLinkName] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const myClasses = classes.filter(c => c.teacherId === currentUser?.id || 't1');
 
@@ -269,15 +274,61 @@ const AssignmentCreate = () => {
     setQuestions(questions.filter(q => q.id !== id));
   };
 
-  const addReferenceMaterial = (type: 'pdf' | 'image' | 'doc' | 'link') => {
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return bytes + 'B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
+  };
+
+  const getFileType = (fileName: string): 'pdf' | 'image' | 'doc' => {
+    const ext = fileName.split('.').pop()?.toLowerCase() || '';
+    if (ext === 'pdf') return 'pdf';
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext)) return 'image';
+    return 'doc';
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const material: ReferenceMaterial = {
+          id: `rm${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          name: file.name,
+          url: event.target?.result as string,
+          type: getFileType(file.name),
+          size: formatFileSize(file.size)
+        };
+        setReferenceMaterials(prev => [...prev, material]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    e.target.value = '';
+  };
+
+  const handleAddLink = () => {
+    if (!linkName.trim() || !linkUrl.trim()) return;
     const material: ReferenceMaterial = {
       id: `rm${Date.now()}`,
-      name: type === 'link' ? '链接资料' : '上传的文件',
-      url: '#',
-      type,
-      size: type === 'link' ? undefined : '1.2MB'
+      name: linkName.trim(),
+      url: linkUrl.trim(),
+      type: 'link'
     };
-    setReferenceMaterials([...referenceMaterials, material]);
+    setReferenceMaterials(prev => [...prev, material]);
+    setLinkName('');
+    setLinkUrl('');
+    setShowLinkModal(false);
+  };
+
+  const openReferenceMaterial = (mat: ReferenceMaterial) => {
+    if (mat.type === 'link' && mat.url !== '#') {
+      window.open(mat.url, '_blank');
+    } else if (mat.url.startsWith('data:')) {
+      window.open(mat.url, '_blank');
+    }
   };
 
   const removeReferenceMaterial = (id: string) => {
@@ -452,15 +503,23 @@ const AssignmentCreate = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-neutral-800">参考资料</h3>
               <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.bmp,.webp,.txt"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
                 <button
-                  onClick={() => addReferenceMaterial('pdf')}
+                  onClick={() => fileInputRef.current?.click()}
                   className="btn-text text-sm"
                 >
                   <Upload className="w-4 h-4 inline mr-1" />
                   上传文件
                 </button>
                 <button
-                  onClick={() => addReferenceMaterial('link')}
+                  onClick={() => setShowLinkModal(true)}
                   className="btn-text text-sm"
                 >
                   <Link2 className="w-4 h-4 inline mr-1" />
@@ -468,7 +527,7 @@ const AssignmentCreate = () => {
                 </button>
               </div>
             </div>
-            
+
             {referenceMaterials.length === 0 ? (
               <div className="py-6 text-center text-neutral-400 text-sm">
                 暂无参考资料，可上传PDF、图片等辅助资料
@@ -478,7 +537,8 @@ const AssignmentCreate = () => {
                 {referenceMaterials.map(mat => (
                   <div
                     key={mat.id}
-                    className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg"
+                    className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg cursor-pointer hover:bg-neutral-100 transition-colors"
+                    onClick={() => openReferenceMaterial(mat)}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-white rounded-lg border border-neutral-200 flex items-center justify-center">
@@ -493,7 +553,10 @@ const AssignmentCreate = () => {
                       </div>
                     </div>
                     <button
-                      onClick={() => removeReferenceMaterial(mat.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeReferenceMaterial(mat.id);
+                      }}
                       className="p-1.5 text-neutral-400 hover:text-danger-500"
                     >
                       <X className="w-4 h-4" />
@@ -634,6 +697,62 @@ const AssignmentCreate = () => {
           </div>
         </>
       )}
+
+      {showLinkModal && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-50" onClick={() => { setShowLinkModal(false); setLinkName(''); setLinkUrl(''); }} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-slide-up">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-neutral-800">添加链接</h3>
+                <button
+                  onClick={() => { setShowLinkModal(false); setLinkName(''); setLinkUrl(''); }}
+                  className="p-1 text-neutral-400 hover:text-neutral-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="input-label">链接名称</label>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="例如：课程教材网站"
+                    value={linkName}
+                    onChange={(e) => setLinkName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="input-label">链接地址</label>
+                  <input
+                    type="url"
+                    className="input"
+                    placeholder="例如：https://example.com"
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => { setShowLinkModal(false); setLinkName(''); setLinkUrl(''); }}
+                  className="btn btn-secondary flex-1"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleAddLink}
+                  className="btn btn-primary flex-1"
+                  disabled={!linkName.trim() || !linkUrl.trim()}
+                >
+                  添加
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </Layout>
   );
 };
@@ -642,6 +761,7 @@ const AssignmentDetail = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const { getAssignmentById, getSubmissionsByAssignmentId, getStudentsByClassId } = useClassStore();
+  const { addNotification } = useNotificationStore();
 
   const assignment = getAssignmentById(id || '');
   const submissions = getSubmissionsByAssignmentId(id || '');
@@ -854,7 +974,25 @@ const AssignmentDetail = () => {
             <div className="card">
               <div className="card-header flex items-center justify-between">
                 <h3 className="font-semibold text-neutral-800">未提交学生</h3>
-                <button className="btn-text text-sm text-warning-600">
+                <button
+                  className="btn-text text-sm text-warning-600"
+                  onClick={() => {
+                    if (notSubmittedStudents.length === 0) return;
+                    if (!window.confirm(`确认向 ${notSubmittedStudents.length} 位未提交学生发送催交提醒？`)) return;
+                    notSubmittedStudents.forEach(student => {
+                      addNotification({
+                        userId: student.id,
+                        userRole: 'student',
+                        type: 'reminder',
+                        title: '作业催交通知',
+                        content: `${assignment.title}还未提交，请尽快完成并提交。`,
+                        relatedId: assignment.id,
+                        relatedType: 'assignment'
+                      });
+                    });
+                    alert(`已向 ${notSubmittedStudents.length} 位学生发送催交提醒`);
+                  }}
+                >
                   一键催交
                 </button>
               </div>
@@ -876,7 +1014,21 @@ const AssignmentDetail = () => {
                         <p className="text-sm font-medium text-neutral-700">{student.name}</p>
                         <p className="text-xs text-neutral-500">{student.studentNo}</p>
                       </div>
-                      <button className="text-xs text-warning-600 hover:text-warning-700">
+                      <button
+                        className="text-xs text-warning-600 hover:text-warning-700"
+                        onClick={() => {
+                          addNotification({
+                            userId: student.id,
+                            userRole: 'student',
+                            type: 'reminder',
+                            title: '作业催交通知',
+                            content: `${assignment.title}还未提交，请尽快完成并提交。`,
+                            relatedId: assignment.id,
+                            relatedType: 'assignment'
+                          });
+                          alert(`已向 ${student.name} 发送催交提醒`);
+                        }}
+                      >
                         催交
                       </button>
                     </div>

@@ -254,6 +254,15 @@ const StudentAssignmentDetail = () => {
                     <div
                       key={mat.id}
                       className="flex items-center gap-3 p-3 bg-neutral-50 rounded-lg cursor-pointer hover:bg-neutral-100 transition-colors"
+                      onClick={() => {
+                        if (mat.type === 'link' && mat.url !== '#') {
+                          window.open(mat.url, '_blank');
+                        } else if (mat.url.startsWith('data:')) {
+                          window.open(mat.url, '_blank');
+                        } else {
+                          alert('该文件暂不支持在线预览');
+                        }
+                      }}
                     >
                       <div className="w-10 h-10 bg-white rounded-lg border border-neutral-200 flex items-center justify-center">
                         {mat.type === 'pdf' && <File className="w-5 h-5 text-danger-500" />}
@@ -543,21 +552,22 @@ const GradingResult = ({ assignment, submission }: { assignment: any; submission
                         imageUrl={submission.images[selectedImage]}
                         annotations={submission.annotations || []}
                         readOnly
+                        pageIndex={selectedImage}
                       />
                     </div>
                     {submission.images.length > 1 && (
                       <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
-                        {submission.images.map((_: string, index: number) => (
+                        {submission.images.map((img: string, index: number) => (
                           <button
                             key={index}
                             onClick={() => setSelectedImage(index)}
-                            className={`flex-shrink-0 w-16 h-16 rounded-lg border-2 transition-all ${
+                            className={`flex-shrink-0 w-16 h-16 rounded-lg border-2 overflow-hidden transition-all ${
                               selectedImage === index
-                                ? 'border-primary-500 bg-primary-50'
+                                ? 'border-primary-500 ring-2 ring-primary-200'
                                 : 'border-neutral-200 hover:border-neutral-300'
                             }`}
                           >
-                            <span className="text-xs text-neutral-500">第{index + 1}张</span>
+                            <img src={img} alt="" className="w-full h-full object-cover" />
                           </button>
                         ))}
                       </div>

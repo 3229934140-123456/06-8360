@@ -10,7 +10,9 @@ import {
   BookOpen,
   Award,
   TrendingUp,
-  Bell
+  Bell,
+  UserPlus,
+  X
 } from 'lucide-react';
 import Layout from '@/components/layout/Layout';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -21,20 +23,28 @@ import { formatDate, getDaysRemaining, isOverdue } from '@/utils';
 const StudentDashboard = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const { assignments, getSubmissionsByStudentId } = useClassStore();
+  const { joinClassByInviteCode, getStudentClassIds, getAssignmentsByClassIds, getSubmissionsByStudentId } = useClassStore();
   const { getUnreadCount, getNotificationsByUser } = useNotificationStore();
+
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [joinError, setJoinError] = useState('');
+  const [joinSuccess, setJoinSuccess] = useState('');
 
   const studentId = currentUser?.id || 's1';
   const submissions = getSubmissionsByStudentId(studentId);
   const notifications = getNotificationsByUser(studentId, 'student');
   const unreadCount = getUnreadCount(studentId, 'student');
 
-  const pendingAssignments = assignments.filter(a => {
+  const studentClassIds = getStudentClassIds(studentId);
+  const classAssignments = getAssignmentsByClassIds(studentClassIds);
+
+  const pendingAssignments = classAssignments.filter(a => {
     const submitted = submissions.find(s => s.assignmentId === a.id);
     return !submitted && a.status === 'published';
   }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
-  const completedAssignments = assignments.filter(a => {
+  const completedAssignments = classAssignments.filter(a => {
     const submitted = submissions.find(s => s.assignmentId === a.id);
     return submitted;
   }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -75,6 +85,34 @@ const StudentDashboard = () => {
     }
   ];
 
+  const handleJoinClass = () => {
+    setJoinError('');
+    setJoinSuccess('');
+    if (!inviteCode.trim()) {
+      setJoinError('请输入邀请码');
+      return;
+    }
+    const student = {
+      id: studentId,
+      name: currentUser?.name || '',
+      studentNo: (currentUser as any)?.studentNo || '',
+      avatar: currentUser?.avatar || '',
+      joinDate: new Date().toISOString()
+    };
+    const result = joinClassByInviteCode(inviteCode.trim(), student);
+    if (result) {
+      setJoinSuccess(`成功加入「${result.name}」！`);
+      setTimeout(() => {
+        setShowJoinModal(false);
+        setInviteCode('');
+        setJoinSuccess('');
+        setJoinError('');
+      }, 1500);
+    } else {
+      setJoinError('邀请码无效，请检查后重试');
+    }
+  };
+
   const urgentAssignments = pendingAssignments.filter(a => {
     const daysRemaining = getDaysRemaining(a.dueDate);
     return daysRemaining <= 2 && daysRemaining >= 0;
@@ -95,6 +133,13 @@ const StudentDashboard = () => {
               <p className="text-white/80 mt-1">今天也要加油完成作业哦 💪</p>
             </div>
           </div>
+          <button
+            onClick={() => { setShowJoinModal(true); setJoinError(''); setJoinSuccess(''); }}
+            className="mt-4 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors backdrop-blur-sm"
+          >
+            <UserPlus className="w-4 h-4" />
+            加入班级
+          </button>
           {urgentAssignments.length > 0 && (
             <div className="mt-6 p-4 bg-white/15 rounded-xl backdrop-blur-sm">
               <p className="text-sm font-medium flex items-center gap-2">
@@ -280,8 +325,8 @@ const StudentDashboard = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-neutral-600">完成率</span>
                   <span className="text-sm font-medium text-neutral-800">
-                    {assignments.length > 0 
-                      ? Math.round((completedAssignments.length / assignments.length) * 100) 
+                    {classAssignments.length > 0 
+                      ? Math.round((completedAssignments.length / classAssignments.length) * 100) 
                       : 0}%
                   </span>
                 </div>
@@ -289,8 +334,8 @@ const StudentDashboard = () => {
                   <div
                     className="h-full bg-gradient-to-r from-primary-500 to-success-500 rounded-full"
                     style={{ 
-                      width: `${assignments.length > 0 
-                        ? (completedAssignments.length / assignments.length) * 100 
+                      width: `${classAssignments.length > 0 
+                        ? (completedAssignments.length / classAssignments.length) * 100 
                         : 0}%` 
                     }}
                   />
@@ -316,6 +361,58 @@ const StudentDashboard = () => {
           </div>
         </div>
       </div>
+
+      {showJoinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-neutral-800">加入班级</h3>
+              <button
+                onClick={() => { setShowJoinModal(false); setInviteCode(''); setJoinError(''); setJoinSuccess(''); }}
+                className="text-neutral-400 hover:text-neutral-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-neutral-500 mb-4">输入老师提供的邀请码，即可加入班级</p>
+            <input
+              type="text"
+              value={inviteCode}
+              onChange={e => setInviteCode(e.target.value.toUpperCase())}
+              placeholder="请输入邀请码，如 ABC123"
+              className="w-full px-4 py-3 border border-neutral-200 rounded-xl text-center text-lg tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              maxLength={10}
+            />
+            {joinError && (
+              <p className="mt-3 text-sm text-red-500 flex items-center gap-1">
+                <AlertCircle className="w-4 h-4" />
+                {joinError}
+              </p>
+            )}
+            {joinSuccess && (
+              <p className="mt-3 text-sm text-success-600 flex items-center gap-1">
+                <CheckCircle className="w-4 h-4" />
+                {joinSuccess}
+              </p>
+            )}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => { setShowJoinModal(false); setInviteCode(''); setJoinError(''); setJoinSuccess(''); }}
+                className="flex-1 px-4 py-2.5 border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleJoinClass}
+                className="flex-1 px-4 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <UserPlus className="w-4 h-4" />
+                加入
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };

@@ -19,6 +19,7 @@ interface AnnotationCanvasProps {
   annotations: Annotation[];
   onChange?: (annotations: Annotation[]) => void;
   readOnly?: boolean;
+  pageIndex?: number;
 }
 
 type ToolType = 'pen' | 'text' | 'rect' | 'highlight' | 'eraser';
@@ -32,7 +33,7 @@ const colors = [
   '#000000'
 ];
 
-const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false }: AnnotationCanvasProps) => {
+const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false, pageIndex = 0 }: AnnotationCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -105,7 +106,7 @@ const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false }:
         ctx.drawImage(img, x, y, w, h);
       }
 
-      const currentAnnotations = history[historyIndex] || [];
+      const currentAnnotations = (history[historyIndex] || []).filter(ann => ann.pageIndex === pageIndex);
       currentAnnotations.forEach(ann => {
         drawAnnotation(ctx, ann);
       });
@@ -159,7 +160,7 @@ const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false }:
     };
 
     drawCanvas();
-  }, [imageUrl, history, historyIndex, isDrawing, currentPath, currentTool, currentColor, strokeWidth, startPos]);
+  }, [imageUrl, history, historyIndex, isDrawing, currentPath, currentTool, currentColor, strokeWidth, startPos, pageIndex]);
 
   const drawAnnotation = (ctx: CanvasRenderingContext2D, ann: Annotation) => {
     ctx.save();
@@ -251,7 +252,7 @@ const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false }:
       const newAnnotation: Annotation = {
         id: `ann-${Date.now()}`,
         type: 'pen',
-        pageIndex: 0,
+        pageIndex: pageIndex,
         color: currentColor,
         strokeWidth,
         points: currentPath
@@ -264,7 +265,7 @@ const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false }:
       const newAnnotation: Annotation = {
         id: `ann-${Date.now()}`,
         type: 'rect',
-        pageIndex: 0,
+        pageIndex: pageIndex,
         color: currentColor,
         strokeWidth,
         x: Math.min(startPos.x, endPos.x),
@@ -280,7 +281,7 @@ const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false }:
       const newAnnotation: Annotation = {
         id: `ann-${Date.now()}`,
         type: 'highlight',
-        pageIndex: 0,
+        pageIndex: pageIndex,
         color: currentColor,
         x: Math.min(startPos.x, endPos.x),
         y: Math.min(startPos.y, endPos.y),
@@ -305,7 +306,7 @@ const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false }:
     const newAnnotation: Annotation = {
       id: `ann-${Date.now()}`,
       type: 'text',
-      pageIndex: 0,
+      pageIndex: pageIndex,
       color: currentColor,
       x: textInput.x,
       y: textInput.y,

@@ -170,6 +170,7 @@ const GradingDetail = () => {
   const [comment, setComment] = useState('');
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [activeTab, setActiveTab] = useState<'image' | 'answer'>('image');
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const assignment = getAssignmentById(assignmentId || '');
   const submissions = getSubmissionsByAssignmentId(assignmentId || '');
@@ -183,6 +184,7 @@ const GradingDetail = () => {
       setScore(currentSubmission.score);
       setComment(currentSubmission.comment || '');
       setAnnotations(currentSubmission.annotations || []);
+      setCurrentImageIndex(0);
     }
   }, [currentSubmission?.id]);
 
@@ -381,12 +383,49 @@ const GradingDetail = () => {
               <div className="flex-1 overflow-hidden">
                 {activeTab === 'image' && (
                   currentSubmission?.images && currentSubmission.images.length > 0 ? (
-                    <div className="h-full">
+                    <div className="h-full flex flex-col">
                       <AnnotationCanvas
-                        imageUrl={currentSubmission.images[0]}
+                        imageUrl={currentSubmission.images[currentImageIndex]}
                         annotations={annotations}
                         onChange={setAnnotations}
+                        pageIndex={currentImageIndex}
                       />
+                      {currentSubmission.images.length > 1 && (
+                        <div className="flex items-center gap-2 px-4 py-3 border-t border-neutral-100 bg-white">
+                          <button
+                            onClick={() => setCurrentImageIndex(Math.max(0, currentImageIndex - 1))}
+                            disabled={currentImageIndex === 0}
+                            className="p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                          <div className="flex gap-2 overflow-x-auto flex-1">
+                            {currentSubmission.images.map((img: string, index: number) => (
+                              <button
+                                key={index}
+                                onClick={() => setCurrentImageIndex(index)}
+                                className={`flex-shrink-0 w-14 h-14 rounded-lg border-2 overflow-hidden transition-all ${
+                                  currentImageIndex === index
+                                    ? 'border-primary-500 ring-2 ring-primary-200'
+                                    : 'border-neutral-200 hover:border-neutral-300'
+                                }`}
+                              >
+                                <img src={img} alt="" className="w-full h-full object-cover" />
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            onClick={() => setCurrentImageIndex(Math.min(currentSubmission.images.length - 1, currentImageIndex + 1))}
+                            disabled={currentImageIndex >= currentSubmission.images.length - 1}
+                            className="p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                          <span className="text-xs text-neutral-500 ml-1">
+                            {currentImageIndex + 1}/{currentSubmission.images.length}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="h-full flex items-center justify-center text-neutral-400">
