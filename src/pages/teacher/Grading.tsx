@@ -160,7 +160,6 @@ const GradingDetail = () => {
   const { 
     getAssignmentById, 
     getSubmissionsByAssignmentId, 
-    getSubmissionById,
     gradeSubmission 
   } = useClassStore();
   const { addNotification } = useNotificationStore();
@@ -175,9 +174,17 @@ const GradingDetail = () => {
   const assignment = getAssignmentById(assignmentId || '');
   const submissions = getSubmissionsByAssignmentId(assignmentId || '');
   const pendingSubmissions = submissions.filter(s => s.status === 'submitted');
-  const currentSubmission = submissionId 
-    ? getSubmissionById(submissionId) 
-    : pendingSubmissions[currentIndex];
+  const displaySubmissions = submissionId ? submissions : pendingSubmissions;
+  const currentSubmission = displaySubmissions[currentIndex];
+
+  useEffect(() => {
+    if (submissionId) {
+      const idx = displaySubmissions.findIndex(s => s.id === submissionId);
+      if (idx !== -1) {
+        setCurrentIndex(idx);
+      }
+    }
+  }, [submissionId, displaySubmissions.length]);
 
   useEffect(() => {
     if (currentSubmission) {
@@ -198,7 +205,6 @@ const GradingDetail = () => {
     );
   }
 
-  const displaySubmissions = submissionId ? submissions : pendingSubmissions;
   
   const goToPrev = () => {
     if (currentIndex > 0) {

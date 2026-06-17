@@ -221,7 +221,7 @@ const AssignmentCreate = () => {
   const [linkUrl, setLinkUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const myClasses = classes.filter(c => c.teacherId === currentUser?.id || 't1');
+  const myClasses = classes.filter(c => c.teacherId === (currentUser?.id || 't1'));
 
   const handleSave = (publish: boolean) => {
     if (!title.trim() || !classId) return;
