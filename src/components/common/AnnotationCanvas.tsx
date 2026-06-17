@@ -21,6 +21,7 @@ interface AnnotationCanvasProps {
   onChange?: (annotations: Annotation[]) => void;
   readOnly?: boolean;
   pageIndex?: number;
+  submissionId?: string;
 }
 
 type ToolType = 'pen' | 'text' | 'rect' | 'highlight' | 'eraser' | 'stamp';
@@ -44,7 +45,7 @@ const STAMPS = [
   { key: 'question' as const, label: '疑问', color: '#8B5CF6', symbol: '?' },
 ];
 
-const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false, pageIndex = 0 }: AnnotationCanvasProps) => {
+const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false, pageIndex = 0, submissionId }: AnnotationCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -60,28 +61,53 @@ const AnnotationCanvas = ({ imageUrl, annotations, onChange, readOnly = false, p
   const [textInput, setTextInput] = useState<{ x: number; y: number; text: string } | null>(null);
   const [currentStamp, setCurrentStamp] = useState<typeof STAMPS[number]['key']>('check');
 
+  useEffect(() => {
+    setHistory([annotations]);
+    setHistoryIndex(0);
+    setCurrentPath([]);
+    setStartPos(null);
+    setTextInput(null);
+    setIsDrawing(false);
+  }, [submissionId, annotations]);
+
   const canvasWidth = 800;
   const canvasHeight = 600;
 
   const pushHistory = useCallback((newAnnotations: Annotation[]) => {
-    const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push(newAnnotations);
-    setHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
-  }, [history, historyIndex]);
+    setHistory(prevHistory => {
+      const newHistory = prevHistory.slice(0, historyIndex + 1);
+      newHistory.push(newAnnotations);
+      setHistoryIndex(newHistory.length - 1);
+      return newHistory;
+    });
+  }, [historyIndex]);
 
   const handleUndo = () => {
-    if (historyIndex > 0) {
-      setHistoryIndex(historyIndex - 1);
-      onChange?.(history[historyIndex - 1]);
-    }
+    setHistoryIndex(prevIndex => {
+      if (prevIndex > 0) {
+        const newIndex = prevIndex - 1;
+        setHistory(prevHistory => {
+          onChange?.(prevHistory[newIndex]);
+          return prevHistory;
+        });
+        return newIndex;
+      }
+      return prevIndex;
+    });
   };
 
   const handleRedo = () => {
-    if (historyIndex < history.length - 1) {
-      setHistoryIndex(historyIndex + 1);
-      onChange?.(history[historyIndex + 1]);
-    }
+    setHistoryIndex(prevIndex => {
+      setHistory(prevHistory => {
+        if (prevIndex < prevHistory.length - 1) {
+          const newIndex = prevIndex + 1;
+          onChange?.(prevHistory[newIndex]);
+          setHistoryIndex(newIndex);
+        }
+        return prevHistory;
+      });
+      return prevIndex;
+    });
   };
 
   const handleClear = () => {

@@ -495,6 +495,36 @@ const GradingResult = ({ assignment, submission }: { assignment: any; submission
   const navigate = useNavigate();
   const [selectedImage, setSelectedImage] = useState(0);
 
+  const hasImages = submission.images && submission.images.length > 0;
+  const hasQuestions = assignment.questions && assignment.questions.length > 0;
+
+  const [resultTab, setResultTab] = useState<'image' | 'answer'>(
+    hasImages ? 'image' : 'answer'
+  );
+
+  const getScoreColor = (score: number, maxScore: number) => {
+    if (maxScore === 0) return 'bg-neutral-100 text-neutral-600';
+    const percentage = (score / maxScore) * 100;
+    if (percentage >= 80) return 'bg-success-100 text-success-700';
+    if (percentage >= 60) return 'bg-warning-100 text-warning-700';
+    return 'bg-danger-100 text-danger-700';
+  };
+
+  const getQuestionTypeLabel = (type: string) => {
+    switch (type) {
+      case 'choice':
+        return '单选题';
+      case 'fill_blank':
+        return '填空题';
+      case 'short_answer':
+        return '简答题';
+      case 'essay':
+        return '作文题';
+      default:
+        return type;
+    }
+  };
+
   return (
     <Layout role="student">
       <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
@@ -514,75 +544,161 @@ const GradingResult = ({ assignment, submission }: { assignment: any; submission
           </div>
         </div>
 
-        <div className="bg-gradient-to-r from-success-50 to-primary-50 rounded-2xl p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center">
-                <CheckCircle className="w-8 h-8 text-success-500" />
-              </div>
-              <div>
-                <p className="text-neutral-600">你的得分</p>
-                <p className="text-4xl font-bold text-neutral-800">
-                  {submission.score}
-                  <span className="text-lg font-normal text-neutral-500">/{assignment.totalScore}</span>
-                </p>
-              </div>
+        <div className="card p-6">
+          <h3 className="font-semibold text-neutral-800 text-lg mb-4 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-primary-500" />
+            批改结果
+          </h3>
+          <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-neutral-500 text-sm">得分：</span>
+              <span className="text-2xl font-bold text-primary-600">
+                {submission.score}
+                <span className="text-sm font-normal text-neutral-500"> / {assignment.totalScore}</span>
+              </span>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-neutral-500">批改老师</p>
-              <p className="font-medium text-neutral-800">{submission.gradedBy}</p>
-              <p className="text-xs text-neutral-400 mt-1">
-                批改时间：{formatDate(submission.gradedAt || '')}
-              </p>
+            <div className="flex items-center gap-3">
+              <span className="text-neutral-500 text-sm">提交时间：</span>
+              <span className="text-neutral-700">{formatDate(submission.submittedAt)}</span>
             </div>
+            <div className="flex items-center gap-3">
+              <span className="text-neutral-500 text-sm">批改老师：</span>
+              <span className="text-neutral-700 font-medium">{submission.gradedBy}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-neutral-500 text-sm">批改时间：</span>
+              <span className="text-neutral-700">{formatDate(submission.gradedAt || '')}</span>
+            </div>
+          </div>
+          <div className="pt-4 border-t border-neutral-100">
+            <p className="text-neutral-500 text-sm mb-2">老师总评：</p>
+            <p className="text-neutral-700 leading-relaxed">
+              {submission.comment || '暂无总评'}
+            </p>
           </div>
         </div>
 
+        {hasQuestions && (
+          <div className="card p-6">
+            <h3 className="font-semibold text-neutral-800 text-lg mb-4 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary-500" />
+              题目得分汇总
+            </h3>
+            <div className="space-y-3">
+              {submission.answers.map((answer: any, index: number) => {
+                const question = assignment.questions.find(
+                  (q: any) => q.id === answer.questionId
+                );
+                const score = answer.score ?? 0;
+                const maxScore = question?.score ?? 0;
+                return (
+                  <div
+                    key={answer.questionId}
+                    className="flex items-start gap-4 p-3 bg-neutral-50 rounded-xl"
+                  >
+                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${getScoreColor(score, maxScore)}`}>
+                      {index + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm text-neutral-500">
+                          {getQuestionTypeLabel(question?.type || '')}
+                        </span>
+                        <span className="text-sm font-medium text-neutral-800">
+                          {score}/{maxScore}分
+                        </span>
+                      </div>
+                      {answer.comment && (
+                        <p className="text-sm text-neutral-600">
+                          老师点评：{answer.comment}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {hasImages && hasQuestions && (
+          <div className="flex gap-2 border-b border-neutral-200">
+            <button
+              onClick={() => setResultTab('image')}
+              className={`px-4 py-3 font-medium text-sm transition-colors relative ${
+                resultTab === 'image'
+                  ? 'text-primary-600'
+                  : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              图片批注
+              {resultTab === 'image' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600" />
+              )}
+            </button>
+            <button
+              onClick={() => setResultTab('answer')}
+              className={`px-4 py-3 font-medium text-sm transition-colors relative ${
+                resultTab === 'answer'
+                  ? 'text-primary-600'
+                  : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              在线答题
+              {resultTab === 'answer' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600" />
+              )}
+            </button>
+          </div>
+        )}
+
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <div className="card">
-              <div className="card-header">
-                <h3 className="font-semibold text-neutral-800">作业图片（含批改）</h3>
-              </div>
-              <div className="p-4">
-                {submission.images && submission.images.length > 0 ? (
-                  <>
-                    <div className="bg-neutral-100 rounded-xl overflow-hidden">
-                      <AnnotationCanvas
-                        imageUrl={submission.images[selectedImage]}
-                        annotations={submission.annotations || []}
-                        readOnly
-                        pageIndex={selectedImage}
-                      />
-                    </div>
-                    {submission.images.length > 1 && (
-                      <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
-                        {submission.images.map((img: string, index: number) => (
-                          <button
-                            key={index}
-                            onClick={() => setSelectedImage(index)}
-                            className={`flex-shrink-0 w-16 h-16 rounded-lg border-2 overflow-hidden transition-all ${
-                              selectedImage === index
-                                ? 'border-primary-500 ring-2 ring-primary-200'
-                                : 'border-neutral-200 hover:border-neutral-300'
-                            }`}
-                          >
-                            <img src={img} alt="" className="w-full h-full object-cover" />
-                          </button>
-                        ))}
+            {resultTab === 'image' && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="font-semibold text-neutral-800">作业图片（含批改）</h3>
+                </div>
+                <div className="p-4">
+                  {hasImages ? (
+                    <>
+                      <div className="bg-neutral-100 rounded-xl overflow-hidden">
+                        <AnnotationCanvas
+                          imageUrl={submission.images[selectedImage]}
+                          annotations={submission.annotations || []}
+                          readOnly
+                          pageIndex={selectedImage}
+                        />
                       </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="py-12 text-center text-neutral-400">
-                    <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>未上传图片</p>
-                  </div>
-                )}
+                      {submission.images.length > 1 && (
+                        <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
+                          {submission.images.map((img: string, index: number) => (
+                            <button
+                              key={index}
+                              onClick={() => setSelectedImage(index)}
+                              className={`flex-shrink-0 w-16 h-16 rounded-lg border-2 overflow-hidden transition-all ${
+                                selectedImage === index
+                                  ? 'border-primary-500 ring-2 ring-primary-200'
+                                  : 'border-neutral-200 hover:border-neutral-300'
+                              }`}
+                            >
+                              <img src={img} alt="" className="w-full h-full object-cover" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="py-12 text-center text-neutral-400">
+                      <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>未上传图片</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
-            {submission.answers && submission.answers.length > 0 && (
+            {resultTab === 'answer' && (
               <div className="card">
                 <div className="card-header">
                   <h3 className="font-semibold text-neutral-800">答题详情</h3>
@@ -657,26 +773,9 @@ const GradingResult = ({ assignment, submission }: { assignment: any; submission
           <div className="space-y-6">
             <div className="card">
               <div className="card-header">
-                <h3 className="font-semibold text-neutral-800">老师评语</h3>
-              </div>
-              <div className="p-6">
-                <div className="p-4 bg-primary-50 rounded-xl">
-                  <p className="text-neutral-700 leading-relaxed">
-                    {submission.comment || '暂无评语'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card-header">
                 <h3 className="font-semibold text-neutral-800">提交信息</h3>
               </div>
               <div className="p-6 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-neutral-500">提交时间</span>
-                  <span className="text-neutral-700">{formatDate(submission.submittedAt)}</span>
-                </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-neutral-500">提交状态</span>
                   <span className="text-success-600">
@@ -684,12 +783,12 @@ const GradingResult = ({ assignment, submission }: { assignment: any; submission
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-neutral-500">批改时间</span>
-                  <span className="text-neutral-700">{formatDate(submission.gradedAt)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
                   <span className="text-neutral-500">图片数量</span>
                   <span className="text-neutral-700">{submission.images?.length || 0} 张</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-neutral-500">题目数量</span>
+                  <span className="text-neutral-700">{assignment.questions?.length || 0} 题</span>
                 </div>
               </div>
             </div>

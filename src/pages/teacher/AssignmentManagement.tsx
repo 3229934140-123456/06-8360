@@ -10,6 +10,8 @@ import {
   CheckCircle,
   ChevronRight,
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   Upload,
   File,
   Link2,
@@ -276,7 +278,8 @@ const AssignmentCreate = () => {
       subject: subject || undefined,
       questions,
       referenceMaterials,
-      totalStudents: selectedClass?.studentCount || 0
+      totalStudents: selectedClass?.studentCount || 0,
+      submissionCount: 0
     });
 
     navigate('/teacher/assignments');
@@ -308,7 +311,22 @@ const AssignmentCreate = () => {
   };
 
   const removeQuestion = (id: string) => {
+    if (!window.confirm('确定删除这道题吗？')) return;
     setQuestions(questions.filter(q => q.id !== id));
+  };
+
+  const moveQuestionUp = (index: number) => {
+    if (index <= 0) return;
+    const newQuestions = [...questions];
+    [newQuestions[index - 1], newQuestions[index]] = [newQuestions[index], newQuestions[index - 1]];
+    setQuestions(newQuestions);
+  };
+
+  const moveQuestionDown = (index: number) => {
+    if (index >= questions.length - 1) return;
+    const newQuestions = [...questions];
+    [newQuestions[index], newQuestions[index + 1]] = [newQuestions[index + 1], newQuestions[index]];
+    setQuestions(newQuestions);
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -496,37 +514,55 @@ const AssignmentCreate = () => {
                 {questions.map((q, index) => (
                   <div
                     key={q.id}
-                    className="p-4 bg-neutral-50 rounded-xl flex items-start justify-between"
+                    className="p-4 bg-neutral-50 rounded-xl flex items-start justify-between gap-3"
                   >
-                    <div className="flex gap-3">
-                      <span className="w-6 h-6 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
-                        {index + 1}
-                      </span>
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="badge badge-neutral">{questionTypeLabels[q.type]}</span>
-                          <span className="text-sm text-neutral-500">{q.score}分</span>
-                          {q.knowledgePoint && (
-                            <span className="text-xs text-primary-600 bg-primary-50 px-2 py-0.5 rounded">
-                              {q.knowledgePoint}
-                            </span>
+                    <div className="flex items-start gap-2 flex-1">
+                      <div className="flex flex-col gap-1 pt-0.5">
+                        <button
+                          onClick={() => moveQuestionUp(index)}
+                          disabled={index === 0}
+                          className="w-6 h-6 rounded-full bg-white border border-neutral-200 flex items-center justify-center text-neutral-500 hover:text-primary-600 hover:border-primary-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        >
+                          <ArrowUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => moveQuestionDown(index)}
+                          disabled={index === questions.length - 1}
+                          className="w-6 h-6 rounded-full bg-white border border-neutral-200 flex items-center justify-center text-neutral-500 hover:text-primary-600 hover:border-primary-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div className="flex gap-3 flex-1">
+                        <span className="w-6 h-6 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
+                          {index + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="badge badge-neutral">{questionTypeLabels[q.type]}</span>
+                            <span className="text-sm text-neutral-500">{q.score}分</span>
+                            {q.knowledgePoint && (
+                              <span className="text-xs text-primary-600 bg-primary-50 px-2 py-0.5 rounded">
+                                {q.knowledgePoint}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-neutral-700 text-sm break-words">{q.content}</p>
+                          {q.options && q.options.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {q.options.map((opt, i) => (
+                                <p key={i} className="text-sm text-neutral-500 break-words">
+                                  {String.fromCharCode(65 + i)}. {opt}
+                                </p>
+                              ))}
+                            </div>
                           )}
                         </div>
-                        <p className="text-neutral-700 text-sm">{q.content}</p>
-                        {q.options && q.options.length > 0 && (
-                          <div className="mt-2 space-y-1">
-                            {q.options.map((opt, i) => (
-                              <p key={i} className="text-sm text-neutral-500">
-                                {String.fromCharCode(65 + i)}. {opt}
-                              </p>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     </div>
                     <button
                       onClick={() => removeQuestion(q.id)}
-                      className="p-1.5 text-neutral-400 hover:text-danger-500 hover:bg-danger-50 rounded-lg"
+                      className="p-1.5 text-neutral-400 hover:text-danger-500 hover:bg-danger-50 rounded-lg flex-shrink-0"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

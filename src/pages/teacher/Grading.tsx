@@ -191,10 +191,10 @@ const GradingDetail = () => {
 
   useEffect(() => {
     if (currentSubmission) {
-      setScore(currentSubmission.score);
-      setComment(currentSubmission.comment || '');
       setAnnotations(currentSubmission.annotations || []);
       setCurrentImageIndex(0);
+      setScore(currentSubmission.score);
+      setComment(currentSubmission.comment || '');
 
       if (currentSubmission.status === 'graded' && currentSubmission.answers) {
         const scores: Record<string, number> = {};
@@ -214,13 +214,22 @@ const GradingDetail = () => {
     }
   }, [currentSubmission?.id]);
 
-  const totalQuestionScore = Object.values(questionScores).reduce((sum, s) => sum + (typeof s === 'number' ? s : 0), 0);
+  const totalQuestionScore = Object.values(questionScores).reduce(
+    (sum, val) => sum + (typeof val === 'number' && !isNaN(val) ? val : 0),
+    0
+  );
+
+  const totalQuestions = assignment?.questions?.length || 0;
+  const scoredCount = Object.values(questionScores).filter(
+    val => typeof val === 'number' && !isNaN(val)
+  ).length;
+  const unscoredCount = totalQuestions - scoredCount;
 
   useEffect(() => {
-    if (totalQuestionScore > 0) {
+    if (assignment?.questions && assignment.questions.length > 0) {
       setScore(totalQuestionScore);
     }
-  }, [totalQuestionScore]);
+  }, [totalQuestionScore, assignment?.questions?.length]);
 
   if (!assignment) {
     return (
@@ -247,6 +256,11 @@ const GradingDetail = () => {
 
   const handleSubmitGrade = () => {
     if (currentSubmission && score !== null) {
+      if (totalQuestions > 0 && unscoredCount > 0) {
+        const confirmed = window.confirm(`还有 ${unscoredCount} 道题未给分，确认提交吗？`);
+        if (!confirmed) return;
+      }
+
       const finalScore = score;
 
       const updatedAnswers = (currentSubmission.answers || []).map(a => ({
@@ -442,6 +456,7 @@ const GradingDetail = () => {
                         annotations={annotations}
                         onChange={setAnnotations}
                         pageIndex={currentImageIndex}
+                        submissionId={currentSubmission.id}
                       />
                       {currentSubmission.images.length > 1 && (
                         <div className="flex items-center gap-2 px-4 py-3 border-t border-neutral-100 bg-white">
@@ -498,12 +513,24 @@ const GradingDetail = () => {
                           const question = assignment.questions.find(
                             q => q.id === answer.questionId
                           );
+                          const isScored = typeof questionScores[answer.questionId] === 'number';
                           return (
-                            <div key={answer.questionId} className="pb-6 border-b border-neutral-100 last:border-0">
+                            <div key={answer.questionId} className={`pb-6 border-b border-neutral-100 last:border-0 ${!isScored ? 'border-l-4 border-l-warning-500 pl-3' : ''}`}>
                               <div className="flex items-center justify-between mb-3">
-                                <span className="font-medium text-neutral-800">
-                                  第 {index + 1} 题
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-neutral-800">
+                                    第 {index + 1} 题
+                                  </span>
+                                  {isScored ? (
+                                    <span className="badge badge-success">
+                                      已给分 <span className="font-bold text-success-700 ml-1">{questionScores[answer.questionId]}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="badge badge-warning">
+                                      待给分
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="flex items-center gap-2">
                                   {answer.isCorrect !== undefined && (
                                     answer.isCorrect ? (
@@ -553,10 +580,21 @@ const GradingDetail = () => {
                                     value={questionScores[answer.questionId] ?? ''}
                                     onChange={(e) => {
                                       const val = e.target.value;
-                                      setQuestionScores(prev => ({
-                                        ...prev,
-                                        [answer.questionId]: val === '' ? (undefined as any) : Number(val)
-                                      }));
+                                      if (val === '') {
+                                        setQuestionScores(prev => ({
+                                          ...prev,
+                                          [answer.questionId]: undefined as any
+                                        }));
+                                      } else {
+                                        let numVal = Number(val);
+                                        const maxScore = question?.score ?? 0;
+                                        if (numVal > maxScore) numVal = maxScore;
+                                        if (numVal < 0) numVal = 0;
+                                        setQuestionScores(prev => ({
+                                          ...prev,
+                                          [answer.questionId]: numVal
+                                        }));
+                                      }
                                     }}
                                   />
                                   <span className="text-sm text-neutral-500">
@@ -653,9 +691,16 @@ const GradingDetail = () => {
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-primary-600 mt-2">
-                    自动汇总：{totalQuestionScore} 分
-                  </p>
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-xs text-primary-600">
+                      自动汇总：{totalQuestionScore} 分
+                    </p>
+                    {totalQuestions > 0 && (
+                      <p className="text-xs text-neutral-500">
+                        已给分 {scoredCount}/{totalQuestions} 题
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <div>
